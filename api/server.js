@@ -21,12 +21,11 @@ const app = express();
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URL);
-    console.log(`Connected to MongoDB successfully`.bgCyan.white);
+    console.log(`Connected to MongoDB successfully`);
   } catch (error) {
-    console.log(`Error connecting to DB ${error}`.bgRed.white);
+    console.log(`Error connecting to DB ${error}`);
   }
 };
-
 
 // Middlewares
 app.use(cors());
@@ -34,9 +33,6 @@ app.use(express.json());
 
 app.use(clerkMiddleware());
 app.use(arcjetMiddleware);
-
-// Connect to database
-connectDB();
 
 // Test route
 app.get("/", (req, res) => {
@@ -52,28 +48,34 @@ app.use("/api/posts", postRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/comments", commentRoutes);
 
-
-// error handling middleware
+// Error handling middleware
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   res.status(500).json({ error: err.message || "Internal server error" });
 });
 
-const startServer = async () => {
-  try {
+// Vercel serverless function handler
+export default async function handler(req, res) {
+  // Connect to database on first request
+  if (mongoose.connection.readyState === 0) {
     await connectDB();
-
-    // listen for local development
-    if (process.env.NODE_ENV !== "production") {
-      app.listen(process.env.PORT, () => console.log("Server is up and running on PORT:", process.env.PORT));
-    }
-  } catch (error) {
-    console.error("Failed to start server:", error.message);
-    process.exit(1);
   }
-};
+  
+  // Forward to Express app
+  return app(req, res);
+}
 
-startServer();
-
-//export for vercel deployment
-export default app;
+// Local development server (only runs locally)
+if (process.env.NODE_ENV !== "production") {
+  const startServer = async () => {
+    try {
+      await connectDB();
+      app.listen(process.env.PORT, () => console.log("Server is up and running on PORT:", process.env.PORT));
+    } catch (error) {
+      console.error("Failed to start server:", error.message);
+      process.exit(1);
+    }
+  };
+  
+  startServer();
+}
