@@ -1,29 +1,72 @@
-const mongoose=require("mongoose")
+const mongoose = require("mongoose");
 
-const userSchema=new mongoose.Schema({
-    name:{
-        type:String,
-        required:[true,'please add name'],
-        trim:true,
-    },
-    email:{
-        type:String,
-        required:[true,'please add email'],
-        unique:true,
-        trim:true
-    },
-    password:{
-        type:String,
-        required:[true,'please add password'],
-        min:6,
-        max:64,
-    },
-    role:{
-        type:String,
-        default:"user",
+const userSchema = new mongoose.Schema(
+  {
+    clerkid: {
+      type: String,
+      reqired: true,
+      unique: true,
     },
 
-},
-{timestamps:true}
+    email: {
+      type: String,
+      reqired: true,
+      unique: true,
+    },
+
+    firstname: {
+      type: String,
+      reqired: true,
+    },
+
+    lastname: {
+      type: String,
+      reqired: true,
+    },
+
+    username: {
+      type: String,
+      reqired: true,
+      unique: true,
+    },
+
+    profilePicture: {
+      type: String,
+      default: "",
+    },
+
+    bannerImage: {
+      type: String,
+      default: "",
+    },
+
+    bio: {
+      type: String,
+      default: "",
+      maxLength: 160,
+    },
+
+    location: {
+      type: String,
+      default: "",
+    },
+
+    follwers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "user",
+      },
+    ],
+
+    following: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "user",
+      },
+    ],
+  },
+  { timestamps: true }
 );
-module.exports=mongoose.model("User",userSchema)
+
+const Post = mongoose.model("User", userSchema);
+export default Post;

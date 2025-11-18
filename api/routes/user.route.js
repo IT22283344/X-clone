@@ -1,10 +1,15 @@
-const express=require('express')
-const { registerController, LoginCntroller,updateUserController ,requireSignIn} = require('../controllers/user.controller')
-
+import express from 'express';
+import { followUser, getCurrentUser, getUserProfile,syncUser,updateProfile} from '../controllers/user.controller.js';
+import protectRouter from '../middleware/auth.middleware.js';
 const router=express.Router()
 
-router.post("/register",registerController)
-router.post("/login",LoginCntroller)
-router.put("/update-user",requireSignIn,updateUserController)
+//public routes
+router.get("/profile/:username",getUserProfile);
 
-module.exports=router
+//protected routes
+router.post("/sync",protectRouter,syncUser);
+router.post("/me",protectRouter,getCurrentUser);
+router.put("/profile",protectRouter,updateProfile);
+router.post("/follow/:targetUserId",protectRouter,followUser)
+
+export default router;

@@ -1,166 +1,114 @@
-const JWT=require('jsonwebtoken')
-const { hashPassword, comparePassword } = require('../middleware/auth.middleware');
-const userModel=require('../models/user.model')
-var { expressjwt: jwt } = require("express-jwt");
+import asyncHandler from "express-async-handler";
+import User from "../models/user.model.js";
+import Notification from "../models/notiication.model.js";
+import { clerkClient , getAuth } from "@clerk/express";
 
+export const getUserProfile = asyncHandler(async (req, res) => {
+  const { username } = req.params;
+  const user = await User.findOne({ username });
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+  res.status(200).json({ user });
+});
 
-//middleware
-const requireSignIn=jwt({
-     secret:process.env.JWT_SECRET, 
-     algorithms: ["HS256"] 
-})
+export const updateProfile = asyncHandler(async (req, res) => {
+  const { userId } = getAuth(req);
+  const user = User.findByIdAndUpdate({ clerkId: userId }, req.body, {
+    new: true,
+  });
 
-//REGISTER
-const registerController=async(req,res)=>{
-    try{
-        const {name,email,password}=req.body
-        if(!name){
-            return res.status(400).send({
-                success:false,
-                message:"name is required"
-            })
-        }
-        if(!email){
-            return res.status(400).send({
-                success:false,
-                message:"email is required"
-            })
-        }
-        if(!password||password.length<6){
-            return res.status(400).send({
-                success:false,
-                message:"password is required"
-            })
-        }
-        const exisitingUser=await userModel.findOne({email})
-        if(exisitingUser){
-            return res.status(500).send({
-                success:false,
-                message:'user already register with this email'
-            })
-        }
-        const hashedPassword=await hashPassword(password)
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+  res.status(200).json({ user });
+});
 
-        const user=await userModel({name,email,password:hashedPassword}).save();
+export const syncUser = asyncHandler(async (req, res) => {
+  const { userId } = req.getAuth();
+  const existingUser = User.findOne({ clerkId: userId });
 
-        return res.status(201).send({
-            success:true,
-            message:'registration successfull please login'
-        })
-    }catch(error){
-        console.log(error)
-        return res.status(500).send({
-            success:false,
-            message:'error in register API',
-            error,
-        })
-    }
-};
+  if (!existingUser) {
+    return res
+      .status(200)
+      .json({ user: existingUser, message: "User already exists" });
+  }
 
+  const clerkUser = new clerkClient.users.getUser(userId);
+  const userData = {
+    clerkId: clerkUser.id,
+    email: clerkUser.emailAddresses[0].emailAddress,
+    fisrtName: clerkUser.firstName || "",
+    lastName: clerkUser.lastName || "",
+    profilePicture: clerkUser.imageUrl || "",
+    username: clerkUser.emailAddresses[0].emailAddress.split("@")[0],
+  };
 
+  const user = await User.create(userData);
+  res.status(201).json({ user, message: "User created successfully" });
+});
 
-//LOGIN
-const LoginCntroller=async(req,res)=>{
-    try{
-        const {email,password}=req.body
+export const getCurrentUser = asyncHandler(async (req, res) => {
+  const { userId } = req.getAuth();
+  const user = await User.findOne({ clerkId: userId });
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+  res.status(200).json({ user });
+});
 
-        if(!email||!password){
-            return res.status(500).send({
-                success:false,
-                message:'Please Provide Email or Password'
-            })
-        }
+export const followUser = asyncHandler(async (req, res) => {
+  const { userId } = req.getAuth();
+  const { targetUserId } = req.params;
 
-        const user=await userModel.findOne({email})
-        if(!user){
-            return res.status(500).send({
-                success:false,
-                message:'User Not Found'
-            })
-        }
+  if (userId === targetUserId) {
+    res.status(400);
+    throw new Error("You cannot follow yourself");
+  }
 
-        const match=await comparePassword(password,user.password);
-        if(!match){
-            return res.status(500).send({
-                success:true,
-                message:'Invalid username or password'
-            })
-        }
-        const token=await JWT.sign({ _id:user._id},process.env.JWT_SECRET,{
-            expiresIn:"7d",
-        })
-        user.password=undefined;
-        res.status(200).send({
-            success:true,
-            message:'Login Successfully',
-            token,
-            user,
-        })
-    }catch(error){
-        console.log(error)
-        return res.status(500).send({
-            success:false,
-            message:'error in login api',
-            error
-        })
+  const currentUser = await User.findOne({ clerkId: userId });
+  const targetUser = await User.findOne({ clerkId: targetUserId });
 
-    }
-}
-const updateUserController=async(req,res)=>{
-    try{
-        const {name,password,email}=req.body
-        const user=await userModel.findOne({email})
+  if (!targetUser) {
+    res.status(404);
+    throw new Error("Target user not found");
+  }
 
-        if(password && password.length<6){
-            return res.status(400).send({
-                success:false,
-                message:'password is required and should be 6  character long'
-            })
-           
-        }
-        const hashedPassword=password? await hashPassword(password):undefined;
-        const updateedUser=await userModel.findOneAndUpdate({email},{
-            name:name||user.name,
-            password:hashedPassword||user.password
+  const isFollowing = currentUser.following.includes(targetUser._id);
 
-        },{new:true})
+  if (isFollowing) {
+    //unfollow user
+    await User.findByIdAndUpdate(currentUser._id, {
+      $pull: { following: targetUser._id },
+    });
+    await User.findByIdAndUpdate(targetUser._id, {
+      $pull: { followers: currentUser._id },
+    });
+    res
+      .status(200)
+      .json({ message: `Unfollowed ${targetUser.username} successfully` });
+      
+  } else {
+    //follow user
+    await User.findByIdAndUpdate(currentUser._id, {
+      $push: { following: targetUser._id },
+    });
+    await User.findByIdAndUpdate(targetUser._id, {
+      $push: { followers: currentUser._id },
+    });
+    await Notification.create({
+      from: currentUser._id,
+      to: targetUser._id,
+      type: "follow",
+    });
 
-        updateedUser.password=undefined;
-
-        res.status(200).send({
-            success:true,
-            message:'profile updated please login',
-            updateedUser
-        })
-    }catch(error){
-        console.log(error)
-        res.status(500).send({
-            success:false,
-            message:"error in user update api",
-            error
-        })
-    }
-}
-
-// GET current user (protected)
-const currentUserController = async (req, res) => {
-    try {
-        const userId = req.auth && req.auth._id;
-        if (!userId) {
-            return res.status(401).send({
-                success: false,
-                message: 'Unauthorized'
-            })
-        }
-        const user = await userModel.findById(userId).select('-password');
-        if(!user){
-            return res.status(404).send({success:false,message:'User not found'})
-        }
-        return res.status(200).send({success:true,user})
-    } catch (error) {
-        console.log(error)
-        return res.status(500).send({success:false,message:'Error in fetching user',error})
-    }
-}
-
-module.exports={registerController,LoginCntroller,updateUserController,requireSignIn,currentUserController}
+    res.status(200).json({
+      message: isFollowing
+        ? "user unfollowed successfully"
+        : `Followed ${targetUser.username} successfully`,
+    });
+  }
+});
