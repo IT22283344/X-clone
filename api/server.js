@@ -35,7 +35,12 @@ app.use(clerkMiddleware());
 app.use(arcjetMiddleware);
 
 // Test route
-app.get("/", (req, res) => res.send("Hello from server"));
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Welcome to X App",
+  });
+});
 
 // Routes
 app.use("/api/users", userRoutes);
