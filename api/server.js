@@ -1,43 +1,79 @@
-import { clerkMiddleware } from "@clerk/express";
 import express from "express";
 import cors from "cors";
-import bodyparser from "body-parser";
+import bodyParser from "body-parser";
+import mongoose from "mongoose";
 import morgan from "morgan";
 import userRoutes from "./routes/user.route.js";
+import postRoutes from "./routes/post.route.js";
+import commentRoutes from "./routes/comment.route.js";
+import notificationRoutes from "./routes/notification.route.js";
+import { clerkMiddleware } from "@clerk/express";
+import { arcjetMiddleware } from "./middleware/arcjet.middleware.js";
+import dotenv from "dotenv";
+import colors from "colors";
 
-const dotenv = require("dotenv");
-const colors = require("colors");
+// Load environment variables
 dotenv.config();
 
-const mongoose = require("mongoose");
+// MongoDB connection
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URL);
-    console.log(`connected to MonogoDB successfully`.bgCyan.white);
+    console.log(`Connected to MongoDB successfully`.bgCyan.white);
   } catch (error) {
-    console.log(`error in connection db ${error}`.bgRed.white);
+    console.log(`Error connecting to DB ${error}`.bgRed.white);
   }
 };
+
 const app = express();
 
+// Middlewares
 app.use(cors());
-app.use(bodyparser.json());
+app.use(bodyParser.json());
 app.use(express.json());
 app.use(clerkMiddleware());
+app.use(arcjetMiddleware);
 app.use(morgan("dev"));
+
+// Connect to database
 connectDB();
 
-app.get("", (req, res) => {
+// Test route
+app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
-    message: "Welcome to X",
+    message: "Welcome to X App",
   });
 });
 
-const PORT = process.env.PORT || 5001;
-
+// Routes
 app.use("/api/users", userRoutes);
+app.use("/api/posts", postRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/comments", commentRoutes);
 
-app.listen(PORT, () => {
-  console.log(`server running ${PORT}`.bgGreen.white);
+
+// error handling middleware
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: err.message || "Internal server error" });
 });
+
+const startServer = async () => {
+  try {
+    await connectDB();
+
+    // listen for local development
+    if (process.env.NODE_ENV !== "production") {
+      app.listen(process.env.PORT, () => console.log("Server is up and running on PORT:", process.env.PORT));
+    }
+  } catch (error) {
+    console.error("Failed to start server:", error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
+
+//export for vercel deployment
+export default app;
