@@ -1,19 +1,21 @@
 import express from "express";
 import cors from "cors";
-import bodyParser from "body-parser";
 import mongoose from "mongoose";
-import morgan from "morgan";
+
 import userRoutes from "./routes/user.route.js";
 import postRoutes from "./routes/post.route.js";
 import commentRoutes from "./routes/comment.route.js";
 import notificationRoutes from "./routes/notification.route.js";
+
 import { clerkMiddleware } from "@clerk/express";
 import { arcjetMiddleware } from "./middleware/arcjet.middleware.js";
+
 import dotenv from "dotenv";
-import colors from "colors";
 
 // Load environment variables
 dotenv.config();
+
+const app = express();
 
 // MongoDB connection
 const connectDB = async () => {
@@ -25,15 +27,13 @@ const connectDB = async () => {
   }
 };
 
-const app = express();
 
 // Middlewares
 app.use(cors());
-app.use(bodyParser.json());
 app.use(express.json());
+
 app.use(clerkMiddleware());
 app.use(arcjetMiddleware);
-app.use(morgan("dev"));
 
 // Connect to database
 connectDB();
